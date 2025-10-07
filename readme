@@ -1,0 +1,11 @@
+/app
+  /frontend      # React 網站（使用者操作的地方）
+  /api           # FastAPI 後端（處理登入、上傳簽名、從 MinIO 取檔代理出去、回應前端）
+  /worker        # 背景工作/任務與你的影像腳本的封裝
+  /infra
+    docker-compose.yml
+    nginx/
+      default.conf
+    minio/       #物件儲存(S3)
+      create-buckets.sh
+  .env
