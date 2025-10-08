@@ -1,0 +1,67 @@
+# ===== Node / Frontend =====
+node_modules/
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/.cache/
+**/coverage/
+**/*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== Python / Backend =====
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+**/.coverage
+**/htmlcov/
+api/.cache/
+api/*.sqlite*
+api/*.db
+
+# ===== Env / Secrets =====
+.env
+.env.*
+!.env.example
+
+# ===== Logs / Dumps =====
+*.log
+logs/
+*.pid
+
+# ===== OS / Editors =====
+.DS_Store
+**/.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+# ===== Docker / Runtime (若有本地掛載資料夾時避免誤納入) =====
+**/.docker/
+**/tmp/
+**/cache/
+**/uploads/
+**/data/
+data/
+storage/
+
+infra/pgdata/
+infra/redisdata/
+infra/miniodata/
+
+# *.mp4
+# *.mov
+# *.mkv
+# samples/
+
+# ===== Misc =====
+*.swp
+*.swo

@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+boto3
+psycopg[binary]
+sqlalchemy
+alembic
+python-jose[cryptography]
+redis
+rq
+pydantic[email]
+google-auth
+requests

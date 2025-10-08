@@ -1,0 +1,130 @@
+/* === Dark Theme Tokens === */
+:root{
+  --bg: #0b0f14;          /* 背景 */
+  --surface: #0e1420;     /* 次級背景 */
+  --panel: #0f172a;       /* 卡片/面板 */
+  --fg: #e5e7eb;          /* 主要文字 */
+  --muted: #9ca3af;       /* 次要文字 */
+  --border: #243244;      /* 邊框線 */
+  --accent: #60a5fa;      /* 主要強調 */
+  --accent-strong:#3b82f6;
+  --danger:#ef4444;
+
+  /* NLE 專用 */
+  --viewer-bg:#000000;
+  --ruler-bg:#0c1320;
+  --ruler-tick:#475569;   /* slate-600 */
+  --track-bg:#0f172a;
+  --selection-fill: rgba(59,130,246,.25);
+  --selection-stroke: rgba(59,130,246,.7);
+
+  /* Scrollbar */
+  --scroll-track:#0b1220;
+  --scroll-thumb:#1f2a3a;
+
+  --code-bg:#0b1220;
+  --table-head:#101827;
+}
+
+html, body, #root { height: 100%; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Scrollbars */
+*::-webkit-scrollbar { height: 10px; width: 10px; }
+*::-webkit-scrollbar-track { background: var(--scroll-track); }
+*::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 10px; }
+* { scrollbar-color: var(--scroll-thumb) var(--scroll-track); scrollbar-width: thin; }
+
+/* 版面骨架 */
+.page { min-height: 100%; display: grid; grid-template-rows: auto 1fr; background: var(--bg); }
+.page-center { min-height: 100%; display: grid; place-items: center; }
+.card { padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--fg); }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.title { margin: 0; }
+.actions { display: flex; gap: 8px; }
+
+.main.two-col {
+  display: grid;
+  grid-template-columns: 420px 1fr; /* 左窄右寬 */
+  gap: 16px;
+  padding: 16px;
+  min-height: 0; /* 讓子元素能 overflow */
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  background: var(--panel);
+}
+.panel.fill { overflow: hidden; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; }
+
+/* 上傳區 */
+.dropzone {
+  border: 2px dashed var(--muted);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--fg);
+}
+.dropzone:hover{ border-color: var(--accent); }
+
+.progress { margin-top: 12px; }
+.progress .bar {
+  height: 8px;
+  background: var(--accent-strong);
+  border-radius: 8px;
+  transition: width .2s;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset;
+}
+.progress .meta { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); }
+
+/* 表格 */
+.table-wrap { flex: 1; min-height: 0; overflow: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; color: var(--fg); }
+.table thead { position: sticky; top: 0; background: var(--table-head); z-index: 1; }
+.table th, .table td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.table tr:hover td { background: rgba(255,255,255,0.02); }
+.row-busy { opacity: .6; pointer-events: none; }
+
+/* 行內程式碼 */
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 6px; color: var(--fg); }
+
+/* 按鈕 */
+button, .btn {
+  font: inherit; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+button:hover, .btn:hover { filter: brightness(1.05); }
+button:disabled, .btn[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--fg); border-color: var(--border); }
+button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+button.danger { background: var(--danger); border-color: var(--danger); }
+
+/* NLE 視圖容器（可覆蓋 inline） */
+.viewer { background: var(--viewer-bg); }
+.timeline-track { background: var(--track-bg); border-top: 1px solid var(--border); }
+.timeline-ruler { background: var(--ruler-bg); }
+.scrollbar-rail { background: var(--scroll-track); }
+.scrollbar-thumb { background: var(--scroll-thumb); }
+.selection { background: var(--selection-fill); border: 1px solid var(--selection-stroke); }
+.playhead { background: #ef4444; }
