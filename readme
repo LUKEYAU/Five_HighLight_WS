@@ -1,11 +1,48 @@
+5人足球精華自動剪輯（Docker 佈署指南）
+
+
+目錄
+1.系統架構
+2.需求與前置作業
+3.快速啟動（本機/伺服器皆同）
+4.換 Port / 用網域與反向代理時要改哪些
+6.Nginx 參考設定
+7.變更矩陣（你改了什麼，該同步調整哪裡）
+8.資料持久化與備份
+9.更新、重啟與除錯
+9.常見問題
+
+系統架構:
 /app
-  /frontend      # React 網站（使用者操作的地方）
+  /frontend      # React 網站
   /api           # FastAPI 後端（處理登入、上傳簽名、從 MinIO 取檔代理出去、回應前端）
-  /worker        # 背景工作/任務與你的影像腳本的封裝
+  /worker        # 背景工作/任務
   /infra
     docker-compose.yml
-    nginx/
-      default.conf
+    nginx/	 
     minio/       #物件儲存(S3)
       create-buckets.sh
   .env
+
+前後端 + API + MinIO + Redis + Worker
+支援 Google Login、S3 直傳（Multipart）、NLE 風格編輯器、背景自動剪輯
+
+需求與前置作業:
+三個子網域：
+前端：http://localhost:5173
+API Health：http://localhost:8000/health
+MinIO Console：http://localhost:9001
+
+Google Cloud Console 已經有GOOGLE_CLIENT_ID
+
+#Clone 並設定環境變數
+git clone https://github.com/LUKEYAU/Five_HighLight_WS.git fivecut
+cd fivecut
+cp .env.example .env
+
+#啟動服務
+cd infra
+docker compose up -d --build
+docker compose up -d --build worker --profile worker
+
+換 Port / 用網域與反向代理時要改哪些:
