@@ -27,7 +27,8 @@ api/*.sqlite*
 api/*.db
 
 # ===== Env / Secrets =====
-.env
+/.env
+**/.env
 .env.*
 !.env.example
 
