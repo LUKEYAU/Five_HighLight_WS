@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMultipartUpload } from "../hooks/useMultipartUpload";
 import { listRecentUploads, type RecentItem } from "../lib/api";
-import { deleteUpload } from "../lib/api"; // ← 新增
+import { deleteUpload, presignDownload } from "../lib/api"; // ← 新增
 import { isSignedIn, clearIdToken } from "../lib/auth";
 import GoogleLogin from "../components/GoogleLogin";
 
@@ -58,6 +58,7 @@ export default function UploadPage() {
     }
   }, [refreshRecent]);
 
+  
   if (!signedIn) {
     return (
       <div className="page page-center">
@@ -149,18 +150,41 @@ export default function UploadPage() {
                         <td><code title={it.key}>{filename}</code></td>
                         <td>{fmtBytes(it.size)}</td>
                         <td>{when ? when.toLocaleString() : "-"}</td>
-                        <td style={{ textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <td style={{ ...td, textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {/* 精華空間（左） */}
+                          <a
+                            className="ghost btn"
+                            href={`/highlights?key=${encodeURIComponent(it.key)}`}
+                            aria-disabled={busy}
+                            onClick={(e) => { if (busy) e.preventDefault(); }}
+                          >精華空間</a>
+
+                          {/* 打開編輯器（中） */}
                           <a
                             className="btn"
                             href={`/editor/${encodeURIComponent(it.key)}`}
                             aria-disabled={busy}
                             onClick={(e) => { if (busy) e.preventDefault(); }}
                           >打開編輯器</a>
+
+                          {/* 下載（右） */}
                           <button
-                            className="danger"
+                            className="ghost"
                             disabled={busy}
-                            onClick={() => onDelete(it.key)}
-                          >{busy ? "刪除中…" : "刪除"}</button>
+                            onClick={async () => {
+                              try {
+                                const { url } = await presignDownload(it.key, 600);
+                                window.open(url, "_blank");
+                              } catch (e: any) {
+                                alert(e?.message ?? String(e));
+                              }
+                            }}
+                          >下載</button>
+
+                          {/* 刪除（沿用） */}
+                          <button className="danger" disabled={busy} onClick={() => onDelete(it.key)}>
+                            {busy ? "刪除中…" : "刪除"}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -174,6 +198,17 @@ export default function UploadPage() {
     </div>
   );
 }
+// 放在 UploadPage.tsx 檔案結尾（export default 組件之後）
+const th: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 12px",
+  borderBottom: "1px solid #eee",
+};
+
+const td: React.CSSProperties = {
+  padding: "10px 12px",
+  borderBottom: "1px solid #f2f2f2",
+};
 
 function fmtBytes(n: number) {
   if (!n) return "0 B";

@@ -9,6 +9,10 @@ from fastapi import FastAPI, Request, HTTPException, Depends, Header, Response, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from typing import Optional
+from rq import Queue
+from rq.job import Job
+import redis as redislib
+
 # Google ID Token 驗證
 from google.oauth2 import id_token as g_id_token
 from google.auth.transport import requests as g_requests
@@ -25,6 +29,8 @@ BUCKET_VIDEOS = os.getenv("S3_BUCKET_VIDEOS", "videos")
 BUCKET_EXPORTS = os.getenv("S3_BUCKET_EXPORTS", "exports")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0") 
+
 
 app = FastAPI()
 app.add_middleware(
@@ -52,6 +58,9 @@ s3_signer = boto3.client(
     region_name=S3_REGION,
     config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
 )
+
+redis_conn = redislib.from_url(REDIS_URL)
+edit_queue = Queue("edits", connection=redis_conn)
 
 def ensure_bucket_exists(bucket: str):
     try:
@@ -180,6 +189,19 @@ def delete_upload(key: str, user: AuthUser = Depends(get_current_user)):
         print(f"[error] delete_upload unexpected: {e}")
         raise HTTPException(status_code=500, detail=f"unexpected: {e}")
 
+@app.get("/downloads/presign/{key:path}")
+def presign_download(key: str, user: AuthUser = Depends(get_current_user), expires: int = 600):
+    """產生 GET 預簽網址（限自己的 key），預設 10 分鐘有效。"""
+    ensure_own_key(user, key)
+    url = s3_signer.generate_presigned_url(
+        ClientMethod="get_object",
+        Params={"Bucket": BUCKET_VIDEOS if key.startswith("users/") and "/uploads/" in key else BUCKET_EXPORTS,
+                "Key": key},
+        ExpiresIn=max(60, min(expires, 3600)),
+        HttpMethod="GET",
+    )
+    return {"url": url}
+
 @app.get("/uploads/recent")
 def uploads_recent(limit: int = 20, user: AuthUser = Depends(get_current_user)):
     ensure_bucket_exists(BUCKET_VIDEOS)
@@ -198,11 +220,73 @@ def uploads_recent(limit: int = 20, user: AuthUser = Depends(get_current_user)):
         print(f"[error] uploads_recent: {e}")
         raise HTTPException(status_code=500, detail=f"list failed: {e}")
 
+@app.post("/edits")
+def create_edit_job(payload: Dict[str, Any], user: AuthUser = Depends(get_current_user)):
+    """
+    建立自動剪輯任務。
+    payload = { "key": <來源 S3 key>, "options": { "superResolution": bool, "fps60": bool } }
+    """
+    src_key = payload.get("key") or ""
+    ensure_own_key(user, src_key)  # 只能處理自己的檔案
+    options = payload.get("options") or {}
+    job = edit_queue.enqueue(
+        "jobs.run_auto_edit",
+        kwargs={
+            "s3_endpoint": S3_ENDPOINT,
+            "s3_region": S3_REGION,
+            "access_key": S3_ACCESS_KEY,
+            "secret_key": S3_SECRET_KEY,
+            "bucket_videos": BUCKET_VIDEOS,
+            "bucket_exports": BUCKET_EXPORTS,
+            "source_key": src_key,
+            "user_sub": user.sub,
+            "options": {
+                "superResolution": bool(options.get("superResolution", False)),
+                "fps60": bool(options.get("fps60", False)),
+            },
+        },
+        job_timeout="2h",
+        result_ttl=86400,
+        failure_ttl=86400,
+    )
+    return {"jobId": job.get_id()}
+
+@app.get("/edits/{job_id}")
+def get_edit_job(job_id: str, user: AuthUser = Depends(get_current_user)):
+    """查詢任務狀態；若完成會回 outputKey。"""
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+    except Exception:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    status = job.get_status()
+    meta = job.meta or {}
+    # 若有 outputKey，驗證確實屬於此 user
+    out_key = meta.get("outputKey")
+    if out_key is not None:
+        ensure_own_key(user, out_key)
+
+    resp = {
+        "id": job.get_id(),
+        "status": status,              # queued / started / finished / failed / deferred
+        "outputKey": out_key,
+        "error": meta.get("error"),
+        "logs": meta.get("logs", [])[:50],  # 最多 50 行簡單日志
+    }
+    return resp
+
+
 # Range 串流：支援 GET + HEAD，回應頭補 Access-Control-Allow-Origin
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 
 @app.api_route("/videos/stream/{key:path}", methods=["GET", "HEAD"])
 def stream_video(key: str, request: Request):
+    # ★ 驗證（允許 header 或 ?token）
+    user = get_user_from_req_or_401(request)
+    # ★ 僅允許擁有者訪問自己的 key
+    ensure_own_key(user, key)
+
+    # 下面維持原本 HEAD/GET + Range 的處理（僅略做封裝）
     try:
         head = s3_internal.head_object(Bucket=BUCKET_VIDEOS, Key=key)
         total = int(head["ContentLength"])
@@ -211,6 +295,15 @@ def stream_video(key: str, request: Request):
         raise HTTPException(status_code=404, detail="object not found")
 
     range_header: Optional[str] = request.headers.get("range") or request.headers.get("Range")
+
+    def _headers(base: Dict[str, str]) -> Dict[str, str]:
+        h = {
+            "Accept-Ranges": "bytes",
+            "Content-Type": content_type,
+            "Access-Control-Allow-Origin": "*",
+        }
+        h.update(base)
+        return h
 
     # HEAD：只回 header
     if request.method == "HEAD":
@@ -230,24 +323,15 @@ def stream_video(key: str, request: Request):
                 end = total - 1
             if start >= total:
                 raise HTTPException(status_code=416, detail="Range Not Satisfiable")
-
             chunk_len = end - start + 1
-            headers = {
-                "Accept-Ranges": "bytes",
+            return Response(status_code=206, headers=_headers({
                 "Content-Range": f"bytes {start}-{end}/{total}",
                 "Content-Length": str(chunk_len),
-                "Content-Type": content_type,
-                "Access-Control-Allow-Origin": "*",
-            }
-            return Response(status_code=206, headers=headers)
+            }))
         else:
-            headers = {
-                "Accept-Ranges": "bytes",
+            return Response(status_code=200, headers=_headers({
                 "Content-Length": str(total),
-                "Content-Type": content_type,
-                "Access-Control-Allow-Origin": "*",
-            }
-            return Response(status_code=200, headers=headers)
+            }))
 
     # GET：實際串流
     if range_header:
@@ -268,20 +352,24 @@ def stream_video(key: str, request: Request):
             raise HTTPException(status_code=416, detail="Range Not Satisfiable")
 
         obj = s3_internal.get_object(Bucket=BUCKET_VIDEOS, Key=key, Range=f"bytes={start}-{end}")
-        headers = {
-            "Accept-Ranges": "bytes",
-            "Content-Range": f"bytes {start}-{end}/{total}",
-            "Content-Length": str(end - start + 1),
-            "Content-Type": content_type,
-            "Access-Control-Allow-Origin": "*",
-        }
-        return StreamingResponse(obj["Body"], status_code=206, headers=headers, media_type=content_type)
+        return StreamingResponse(
+            obj["Body"], status_code=206, headers=_headers({
+                "Content-Range": f"bytes {start}-{end}/{total}",
+                "Content-Length": str(end - start + 1),
+            }), media_type=content_type
+        )
 
     obj = s3_internal.get_object(Bucket=BUCKET_VIDEOS, Key=key)
-    headers = {
-        "Accept-Ranges": "bytes",
+    return StreamingResponse(obj["Body"], headers=_headers({
         "Content-Length": str(total),
-        "Content-Type": content_type,
-        "Access-Control-Allow-Origin": "*",
-    }
-    return StreamingResponse(obj["Body"], headers=headers, media_type=content_type)
+    }), media_type=content_type)
+
+def get_user_from_req_or_401(request: Request) -> AuthUser:
+    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+    if auth and auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
+        return verify_google_id_token(token)
+    token = request.query_params.get("token")
+    if token:
+        return verify_google_id_token(token)
+    raise HTTPException(status_code=401, detail="Missing or invalid token")

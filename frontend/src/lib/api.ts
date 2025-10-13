@@ -61,3 +61,36 @@ export async function deleteUpload(key: string) {
   });
   if (!r.ok && r.status !== 204) throw new Error(`delete failed: ${r.status}`);
 }
+
+// 建立剪輯任務
+export async function createEdit(key: string, options: { superResolution?: boolean; fps60?: boolean }) {
+  const r = await fetch(`${API_BASE}/edits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ key, options }),
+  });
+  if (!r.ok) throw new Error(`create edit failed: ${r.status}`);
+  return (await r.json()) as { jobId: string };
+}
+
+// 查詢剪輯任務
+export type EditStatus = {
+  id: string;
+  status: "queued" | "started" | "finished" | "failed" | "deferred";
+  outputKey?: string;
+  error?: string;
+  logs?: string[];
+};
+export async function getEdit(jobId: string) {
+  const r = await fetch(`${API_BASE}/edits/${jobId}`, { headers: { ...authHeader() } });
+  if (!r.ok) throw new Error(`get edit failed: ${r.status}`);
+  return (await r.json()) as EditStatus;
+}
+
+export async function presignDownload(key: string, expires = 600) {
+  const r = await fetch(`${API_BASE}/downloads/presign/${encodeURIComponent(key)}?expires=${expires}`, {
+    headers: { ...authHeader() },
+  });
+  if (!r.ok) throw new Error(`presign failed: ${r.status}`);
+  return (await r.json()) as { url: string };
+}

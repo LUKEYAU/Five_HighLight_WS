@@ -128,3 +128,18 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 .scrollbar-thumb { background: var(--scroll-thumb); }
 .selection { background: var(--selection-fill); border: 1px solid var(--selection-stroke); }
 .playhead { background: #ef4444; }
+/* Modal */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: grid; place-items: center; z-index: 30;
+}
+.modal {
+  width: min(520px, 90vw);
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.modal .row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }

@@ -1,11 +1,352 @@
+5人足球精華自動剪輯(Docker 佈署指南)
+
+
+目錄
+1.系統架構
+2.需求與前置作業
+3.快速啟動(本機/伺服器皆同)
+4.換 Port / 用網域與反向代理時要改哪些
+6.Nginx 參考設定
+7.變更矩陣(你改了什麼，該同步調整哪裡)
+8.資料持久化與備份
+9.更新、重啟與除錯
+9.常見問題
+
+系統架構:
 /app
-  /frontend      # React 網站（使用者操作的地方）
-  /api           # FastAPI 後端（處理登入、上傳簽名、從 MinIO 取檔代理出去、回應前端）
-  /worker        # 背景工作/任務與你的影像腳本的封裝
+  /frontend      # React 網站
+  /api           # FastAPI 後端(處理登入、上傳簽名、從 MinIO 取檔代理出去、回應前端)
+  /worker        # 背景工作/任務
   /infra
     docker-compose.yml
-    nginx/
-      default.conf
+    nginx/	 
     minio/       #物件儲存(S3)
       create-buckets.sh
   .env
+
+前後端 + API + MinIO + Redis + Worker
+支援 Google Login、S3 直傳(Multipart)、NLE 風格編輯器、背景自動剪輯
+
+需求與前置作業:
+三個子網域(可改):
+前端:http://localhost:5173
+API Health:http://localhost:8000/health
+MinIO Console:http://localhost:9001
+
+#Clone 並設定環境變數
+git clone https://github.com/LUKEYAU/Five_HighLight_WS.git fivecut
+cd fivecut
+cp .env.example.env
+
+.env 範例(請依實際調整):
+----------------------------------------------------
+# 前後端 URL(用於 CORS)
+FRONTEND_ORIGIN=http://localhost:5173
+
+# Google OAuth
+GOOGLE_CLIENT_ID=(可調整)
+
+# MinIO / S3
+S3_ENDPOINT=http://minio:9000          # 內部給容器用
+S3_PUBLIC_ENDPOINT=http://localhost:9000  # 瀏覽器直連 MinIO 的位址(改用網域時要改)
+S3_REGION=us-east-1
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadminpw
+S3_BUCKET_VIDEOS=videos
+S3_BUCKET_EXPORTS=exports
+
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+----------------------------------------------------
+
+啟動服務
+
+cd infra
+docker compose up -d --build
+docker compose up -d --build worker --profile worker
+
+存取服務
+前端:http://localhost:5173
+API Health:http://localhost:8000/health
+MinIO Console:http://localhost:9001
+
+
+換 Port / 用網域與反向代理時要改哪些
+A. 只換對外 port(不走網域)
+
+假設把:
+前端對外改為 :3000
+API 對外改為 :8080
+MinIO(S3)對外改為 :19000(Console 可維持 9001 或自訂)
+
+步驟:
+編輯 infra/docker-compose.yml:
+  frontend:
+    environment:
+      VITE_API_BASE: http://localhost:8080 (給瀏覽器用)
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    ports: ["3000:5173"]
+      frontend:
+
+  api:
+    ports: ["8080:8000"]
+
+  minio:
+    ports:
+      - "19000:9000"   # S3 API
+      - "9001:9001"    # Console
+
+
+同步修改 .env:
+FRONTEND_ORIGIN=http://localhost:3000
+BACKEND_BASE=http://localhost:8080
+S3_PUBLIC_ENDPOINT=http://localhost:19000
+
+
+同步修改 infra/docker-compose.yml 的 frontend.env(給瀏覽器用):
+
+  frontend:
+    environment:
+      VITE_API_BASE: http://localhost:8080
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+
+
+重建:
+
+docker compose up -d --build
+
+
+要點:
+
+.env 的 FRONTEND_ORIGIN 影響 API 的 CORS；
+
+VITE_API_BASE 是前端打 API 的 URL；
+
+S3_PUBLIC_ENDPOINT 是 API 幫你「簽名」時寫進預簽 URL 的主機，一定要是瀏覽器能直連的對外位址與 Port。
+
+B. 改用網域(建議做法)
+
+建議配三個子網域(HTTPS):
+
+app.example.edu → 前端
+
+api.example.edu → API
+
+s3.example.edu → MinIO(S3 API 給瀏覽器 PUT 直傳)
+
+infra/docker-compose.yml:把對外 ports 關掉或只暴露給本機(反向代理會接手)
+
+  frontend:
+    ports: ["5173:5173"]  # 若用反向代理可移除，或保留給內網測試
+
+  api:
+    ports: ["8000:8000"]  # 同上，反代後可移除
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+
+.env 改成網域:
+
+FRONTEND_ORIGIN=https://app.example.edu
+BACKEND_BASE=https://api.example.edu
+S3_PUBLIC_ENDPOINT=https://s3.example.edu
+
+
+infra/docker-compose.yml → frontend.environment:
+
+  frontend:
+    environment:
+      VITE_API_BASE: https://api.example.edu
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+
+
+設定反向代理(見下方 Nginx 參考設定
+)
+
+Google OAuth → Authorized JavaScript origins 加入:
+https://app.example.edu
+
+要點:
+
+S3 直傳是由瀏覽器直打 s3.example.edu，所以 S3_PUBLIC_ENDPOINT 必須是 HTTPS 的 S3 子網域；
+
+反向代理對 s3.example.edu 要允許 大檔 PUT(client_max_body_size 0; proxy_request_buffering off;)；
+
+API 的 CORS 會允許 FRONTEND_ORIGIN，所以要跟前端實際網域一致。
+
+Nginx 參考設定
+
+僅供參考，可改用 Caddy/Traefik。請自行安裝 TLS 憑證(例如 certbot)。
+
+1) api.example.edu → FastAPI(容器內部 api:8000)
+server {
+  listen 443 ssl;
+  server_name api.example.edu;
+
+  ssl_certificate     /etc/letsencrypt/live/api.example.edu/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/api.example.edu/privkey.pem;
+
+  location / {
+    proxy_pass http://api:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # 串流/Range 建議關閉緩衝
+    proxy_buffering off;
+  }
+}
+
+2) app.example.edu → 前端(容器內 frontend:5173)
+
+目前是 Vite dev server，反代可先這樣；若要 production 靜態檔，之後可改成 build 再用 nginx/靜態伺服。
+
+server {
+  listen 443 ssl;
+  server_name app.example.edu;
+
+  ssl_certificate     /etc/letsencrypt/live/app.example.edu/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/app.example.edu/privkey.pem;
+
+  location / {
+    proxy_pass http://frontend:5173;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # 讓 HMR/WS 可用(若用 dev server)
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+}
+
+3) s3.example.edu → MinIO(容器內 minio:9000)
+server {
+  listen 443 ssl;
+  server_name s3.example.edu;
+
+  ssl_certificate     /etc/letsencrypt/live/s3.example.edu/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/s3.example.edu/privkey.pem;
+
+  # 大檔直傳:關鍵設定
+  client_max_body_size 0;
+  proxy_request_buffering off;
+
+  location / {
+    proxy_pass http://minio:9000;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    # 讓瀏覽器看到 MinIO 的 ETag / CORS
+    add_header Access-Control-Allow-Origin * always;
+    add_header Access-Control-Expose-Headers ETag always;
+
+    # 預檢請求
+    if ($request_method = OPTIONS) {
+      add_header Access-Control-Allow-Origin *;
+      add_header Access-Control-Allow-Methods 'GET, PUT, POST, HEAD, OPTIONS';
+      add_header Access-Control-Allow-Headers *;
+      add_header Content-Length 0;
+      add_header Content-Type text/plain;
+      return 204;
+    }
+  }
+}
+
+
+注意:我們的預簽 URL 由 S3_PUBLIC_ENDPOINT 生成，因此只要這個值是 https://s3.example.edu，就不需要讓 MinIO 自行知道外部網址。
+
+變更矩陣(你改了什麼，該同步調整哪裡)
+你做的改動	要同步調整
+改「前端」對外 Port 或網域	.env 的 FRONTEND_ORIGIN；反代主機；Google OAuth 的 Authorized JavaScript origins
+改「API」對外 Port 或網域	.env 的 BACKEND_BASE；frontend 服務的 VITE_API_BASE；反代主機
+改「MinIO(S3)」對外 Port 或網域	.env 的 S3_PUBLIC_ENDPOINT；反代主機；(可選)MinIO CORS(我們預設 *)
+反代走子路徑(例如 https://app.example.edu/api)	VITE_API_BASE 要寫成 https://app.example.edu/api；反代把 /api 導到 api:8000/；FRONTEND_ORIGIN 只寫前端主站，不包含 /api
+改為 HTTPS	三者 URL 全部用 https://(FRONTEND_ORIGIN、BACKEND_BASE、S3_PUBLIC_ENDPOINT、VITE_API_BASE)；Google OAuth origins 也要是 https://
+限縮 CORS	1) .env 把 FRONTEND_ORIGIN 設為你的前端域名；2) MinIO CORS 改成只允許你的前端域名(minio-init 可改)
+將服務放到子機/不同機器	反代 upstream 指向相應主機；S3_PUBLIC_ENDPOINT 要對外可達；S3_ENDPOINT 保持容器內能連(或改成對內可達位址)
+資料持久化與備份
+
+infra/docker-compose.yml 已用 volumes:
+
+miniodata:MinIO 物件檔(最重要)
+
+pgdata:未來如果用到 PostgreSQL(目前可選)
+
+redisdata:Redis AOF
+
+備份建議:
+
+MinIO:直接備份 volume 路徑(或用 mc mirror 到外部備援桶)
+
+.env、docker-compose.yml、所有程式碼(Git)
+
+更新、重啟與除錯
+
+更新程式:
+
+git pull
+cd infra
+docker compose build
+docker compose up -d
+
+
+查看日誌:
+
+docker compose logs -f api
+docker compose logs -f frontend
+docker compose logs -f worker --profile worker
+docker compose logs -f minio
+
+
+健康檢查:
+
+curl -i http://localhost:8000/health
+
+
+檢測串流(Range/HEAD):
+
+KEY='<某個已上傳的 key>'
+curl -I "http://localhost:8000/videos/stream/$KEY"
+curl -I -H "Range: bytes=0-1048575" "http://localhost:8000/videos/stream/$KEY"
+
+常見問題
+
+Q1. 換了 Port/網域後，前端上傳變 403 / Failed to fetch？
+A:檢查三件:
+
+.env 的 S3_PUBLIC_ENDPOINT 是否改成瀏覽器實際連到 MinIO 的對外位址(含 https/port)
+
+frontend 的 VITE_API_BASE 是否指向瀏覽器可達的 API 對外位址
+
+反向代理對 s3.example.edu 是否設了 client_max_body_size 0; proxy_request_buffering off;
+
+Q2. CORS 錯誤？
+A:FRONTEND_ORIGIN 要與前端實際來源一模一樣(含協定與 Port)。MinIO 的 CORS 我們預設 *；若你改成鎖域名，請確定前端來源列在允許清單。
+
+Q3. Google Login 彈窗出不來或 401？
+A:Google OAuth 的 Authorized JavaScript origins 是否包含你當前的前端來源(含 https 與 Port)。API 端 401 多半是缺 Authorization: Bearer <id_token> —— 請登入後再操作。
+
+Q4. 自動剪輯沒有反應？
+A:記得啟動 worker(--profile worker)。再看 docker compose logs -f worker 是否成功執行。
+
+Q5. 反代要走單一網域 + 子路徑(例:/api、/s3)可以嗎？
+A:可以，但務必:
+
+VITE_API_BASE 換成 https://app.example.edu/api；
+
+反代把 /api 轉給 api:8000/；
+
+S3_PUBLIC_ENDPOINT 換成 https://app.example.edu/s3，並在反代把 /s3 轉給 minio:9000/；
+
+由於 S3 預簽 URL 含 Host + 路徑，請確保最終被瀏覽器看到的 URL 與 S3_PUBLIC_ENDPOINT 完全一致(包含子路徑前綴)。
