@@ -4,13 +4,10 @@
 目錄
 1.系統架構
 2.需求與前置作業
-3.快速啟動(本機/伺服器皆同)
-4.換 Port / 用網域與反向代理時要改哪些
-6.Nginx 參考設定(暫無)
-7.變更矩陣(你改了什麼，該同步調整哪裡)
-8.資料持久化與備份
-9.更新、重啟與除錯
-9.常見問題
+3.啟動服務
+4.存取
+5.換 Port / 用網域與反向代理時要改哪些
+6.更新、重啟與除錯
 
 系統架構:
 /app
@@ -49,14 +46,14 @@ GOOGLE_CLIENT_ID=
 
 #如需要通知我們
 Google OAuth → Authorized JavaScript origins 加入:
-https://app.example.edu
+https://app.example.com
 
 #啟動服務
 cd infra
 docker compose up -d --build
 docker compose up -d --build worker --profile worker
 
-#存取服務
+#存取
 前端:http://localhost:5173
 API Health:http://localhost:8000/health
 MinIO Console:http://localhost:9001
@@ -76,7 +73,6 @@ services:
   frontend:
     environment:
       VITE_API_BASE: http://localhost:8080
-      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     ports:
       - "3000:5173"
 
@@ -106,16 +102,20 @@ VITE_API_BASE 是前端打 API 的 URL;
 S3_PUBLIC_ENDPOINT 是 API 幫你「簽名」時寫進預簽 URL 的主機，一定要是瀏覽器能直連的對外位址與 Port。
 
 B. 改用網域(反向代理)
+開 80(HTTP) 和 443(HTTPS) 給外部,再反向代理5173、8000、9000/9001(不對外開)
+
 建議配三個子網域(HTTPS):
-app.example.edu → 前端
-api.example.edu → API
-s3.example.edu → MinIO(S3 API 給瀏覽器 PUT 直傳)
+app.example.com → 前端
+api.example.com → API
+s3.example.com → MinIO(S3 API 給瀏覽器 PUT 直傳)
 
 
 infra/docker-compose.yml:把對外 ports 關掉
 services:
   frontend:
     # ports: ["5173:5173"]  # 可移除，或保留給內網測試
+    environment:
+      VITE_API_BASE: api.example.com
   api:
     # ports: ["8000:8000"]  # 同上
   minio:
@@ -128,20 +128,7 @@ services:
 .env 改成網域:
 
 FRONTEND_ORIGIN=https://app.example.edu
-BACKEND_BASE=https://api.example.edu
 S3_PUBLIC_ENDPOINT=https://s3.example.edu
-
-
-infra/docker-compose.yml → frontend.environment:
-  frontend:
-    environment:
-      VITE_API_BASE: https://api.example.edu
-      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-
-
-
-
-
 
 
 更新、重啟與除錯
