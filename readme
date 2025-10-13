@@ -24,13 +24,14 @@
       conf.d/*.conf
     minio/       # 物件儲存（S3）
       create-buckets.sh
+    .env 
   .env 
 
-#如需要通知我們
-Google OAuth → Authorized JavaScript origins 加入:
-https://app.example.edu
+
 
 需求與前置作業:
+要Docker
+
 三個子網域(可改):
 前端:http://localhost:5173
 API Health:http://localhost:8000/health
@@ -40,6 +41,15 @@ MinIO Console:http://localhost:9001
 git clone https://github.com/LUKEYAU/Five_HighLight_WS.git fivecut
 cd fivecut
 cp .env.example.env
+打開.env 修改
+cd infra
+建 /infra/.env
+內容為:
+GOOGLE_CLIENT_ID=
+
+#如需要通知我們
+Google OAuth → Authorized JavaScript origins 加入:
+https://app.example.edu
 
 #啟動服務
 cd infra
