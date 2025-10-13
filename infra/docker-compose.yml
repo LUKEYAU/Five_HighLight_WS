@@ -80,6 +80,22 @@ services:
     volumes:
       - ../models:/models:ro
 
+  nginx:
+    image: nginx:1.25-alpine
+    depends_on:
+      - api
+      - frontend
+      - minio
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # 如果你要用 Let's Encrypt/certbot，可把憑證掛進來
+      # - ./nginx/certs:/etc/nginx/certs:ro
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
