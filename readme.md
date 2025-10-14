@@ -51,7 +51,7 @@ touch .env
 GOOGLE_CLIENT_ID=
 ```
 
-*如需要通知我們*
+*如需要通知我們*  
 Google OAuth → Authorized JavaScript origins 加入:
 https://app.example.com
 
@@ -71,9 +71,9 @@ docker compose up -d --build worker --profile worker
 ## 換 Port / 用網域與反向代理時要改哪些
 **A. 只換對外 port(不走網域)**
 
-假設把:
-前端對外改為 :3000
-API 對外改為 :8080
+假設把:  
+前端對外改為 :3000  
+API 對外改為 :8080  
 MinIO(S3)對外改為 :19000(Console 可維持 9001 或自訂)
 
 **步驟:
@@ -108,18 +108,18 @@ docker compose up -d --build
 ```
 
 **要點:**
-.env 的 FRONTEND_ORIGIN 影響 API 的 CORS;
-VITE_API_BASE 是前端打 API 的 URL;
-S3_PUBLIC_ENDPOINT 是 API 幫你「簽名」時寫進預簽 URL 的主機，一定要是瀏覽器能直連的對外位址與 Port。
+- .env 的 FRONTEND_ORIGIN 影響 API 的 CORS
+- VITE_API_BASE 是前端打 API 的 URL
+- S3_PUBLIC_ENDPOINT 是 API 幫你「簽名」時寫進預簽 URL 的主機，一定- 要是瀏覽器能直連的對外位址與 Port
 
 ---
 **B. 改用網域(反向代理)**
 開 80(HTTP) 和 443(HTTPS) 給外部,再反向代理5173、8000、9000/9001(不對外開)
 
 建議配三個子網域(HTTPS):
-app.example.com → 前端
-api.example.com → API
-s3.example.com → MinIO(S3 API 給瀏覽器 PUT 直傳)
+- app.example.com → 前端
+- api.example.com → API
+- s3.example.com → MinIO(S3 API 給瀏覽器 PUT 直傳)
 
 
 infra/docker-compose.yml:把對外 ports 關掉
