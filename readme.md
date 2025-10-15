@@ -51,6 +51,7 @@ cd fivecut
 cd infra
 cp .env.example .env
 ```
+
 放tls憑證至fiveut/infra/nginx/ssl  
 - fiveclip.fcuai.tw.crt / fiveclip.fcuai.tw.key
 - fiveclip-api.fcuai.tw.crt / fiveclip-api.fcuai.tw.key
@@ -62,7 +63,7 @@ cp .env.example .env
 - /fivecut/infra/nginx/conf.d/minio.conf
 Nginx reload:
 ```bash
-cd /home/luke/fivecut/infra
+cd infra
 docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
 ```
 

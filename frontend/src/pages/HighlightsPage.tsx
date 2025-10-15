@@ -25,7 +25,7 @@ export default function HighlightsPage() {
     <div className="page" style={{ height: "100vh", gridTemplateRows: "auto 1fr" }}>
       <header className="topbar">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <strong>精華空間</strong>
+          <strong>精華空間 待完善</strong>
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
