@@ -81,8 +81,9 @@ docker compose build --no-cache frontend
 docker compose up -d --build
 docker compose up -d --build worker --profile worker
 ```
-
-
+https://fiveclip.fcuai.tw/
+https://fiveclip-api.fcuai.tw/healthz
+https://fiveclip-s3.fcuai.tw/(封閉,只可用於物件儲存)
 ## 更新、重啟與除錯
 
 更新程式:
