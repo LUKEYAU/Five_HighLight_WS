@@ -67,3 +67,7 @@ infra/miniodata/
 *.swp
 *.swo
 
+*.crt
+*.key
+*.pem
+.mc/

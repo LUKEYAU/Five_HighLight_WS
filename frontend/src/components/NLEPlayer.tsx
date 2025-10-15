@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function cssVar(name: string, fallback: string){
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -23,18 +23,6 @@ export default function NLEPlayer({ src }: { src: string }) {
 
   const viewW = 960;
   const viewH = 540;
-
-  const tick = useMemo(() => {
-    const pps = zoom;
-    if (pps > 300) return 0.1;
-    if (pps > 150) return 0.2;
-    if (pps > 80) return 0.5;
-    if (pps > 40) return 1;
-    if (pps > 20) return 2;
-    if (pps > 10) return 5;
-    if (pps > 5) return 10;
-    return 30;
-  }, [zoom]);
 
   useEffect(() => {
     const v = videoRef.current!;
@@ -66,7 +54,7 @@ export default function NLEPlayer({ src }: { src: string }) {
     try { ctx.drawImage(v, dx, dy, dw, dh); } catch {}
   }, []);
 
-  const loop = useCallback((now: number, metadata: any) => {
+  const loop = useCallback((_now: number, metadata: any) => {
     drawFrame();
     if (rVFCId.current !== null && (videoRef.current as any).requestVideoFrameCallback) {
       rVFCId.current = (videoRef.current as any).requestVideoFrameCallback(loop);

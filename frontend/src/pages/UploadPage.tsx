@@ -198,12 +198,6 @@ export default function UploadPage() {
     </div>
   );
 }
-// 放在 UploadPage.tsx 檔案結尾（export default 組件之後）
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 12px",
-  borderBottom: "1px solid #eee",
-};
 
 const td: React.CSSProperties = {
   padding: "10px 12px",

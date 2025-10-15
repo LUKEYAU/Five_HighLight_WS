@@ -39,16 +39,12 @@
 ```bash
 git clone https://github.com/LUKEYAU/Five_HighLight_WS.git fivecut
 cd fivecut
-cp .env.example.env
-#打開/fivecut/.env 修改參數
-```
-```bash
 cd infra
-touch .env
+cp .env .env.example
 ```
-**/fivecut//infra/.env**內容為:
+放tls憑證至fiveut/infra/nginx/ssl
 ```
-GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_ID=....
 ```
 
 *如需要通知我們*  
@@ -58,17 +54,18 @@ https://app.example.com
 ## 啟動服務
 ```bash
 cd infra
+docker compose build --no-cache frontend
 docker compose up -d --build
 docker compose up -d --build worker --profile worker
 ```
 
-## 存取
+## 存取(不用看)
 - 前端:http://localhost:5173
 - API Health:http://localhost:8000/health
 - MinIO Console:http://localhost:9001
 
 ---
-## 換 Port / 用網域與反向代理時要改哪些
+## 換 Port / 用網域與反向代理時要改哪些(不用看)
 **A. 只換對外 port(不走網域)**
 
 假設把:  
