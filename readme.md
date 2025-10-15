@@ -1,29 +1,28 @@
-# 5人足球精華自動剪輯（Docker 佈署指南）
+# 5人足球精華自動剪輯(Docker 佈署指南)
 
 ## 目錄
 1. [系統架構](#系統架構)  
 2. [需求與前置作業](#需求與前置作業)  
 3. [啟動服務](#啟動服務)  
-4. [存取](#存取)  
-5. [換 Port / 用網域與反向代理時要改哪些](#換-port--用網域與反向代理時要改哪些)  
-6. [更新、重啟與除錯](#更新、重啟與除錯)
+4. [更新、重啟與除錯](#更新、重啟與除錯)
 
 
 ## 系統架構
+vite 轉 靜態檔 Nginx(/fronted/Dockerfile.prod)
 ```
 /app
-  /frontend      # React 網站（Vite Dev / 可改成靜態 build）
-  /api           # FastAPI 後端（登入驗證、S3 預簽、串流代理、任務 API）
-  /worker        # 背景工作（RQ Worker;自動剪輯/FFmpeg 示範）
+  /frontend      # React 網站(Vite Dev / 改成靜態 build)
+  /api           # FastAPI 後端(登入驗證、S3 預簽、串流代理、任務 API)
+  /worker        # 背景工作(RQ Worker;自動剪輯/FFmpeg 示範)
   /infra
     docker-compose.yml
     nginx/
       nginx.conf
       conf.d/*.conf
-    minio/       # 物件儲存（S3）
+      ssl/       #tls cert
+    minio/       # 物件儲存(S3)
       create-buckets.sh
     .env 
-  .env 
 ```
 ---
 
@@ -31,18 +30,42 @@
 - 需要Docker
 
 三個子網域(可改):
-- 前端:http://localhost:5173
-- API Health:http://localhost:8000/health
-- MinIO Console:http://localhost:9001
+- fiveclip.fcuai.tw -> nginx:443
+- fiveclip-api.fcuai.tw -> nginx:443
+- fiveclip-s3.fcuai.tw -> nginx:443
+
+轉發到：
+- frontend 容器 :80
+- api 容器 :8000
+- minio 容器 :9000
+```
+/fivecut/infra/nginx/conf.d/frontend.conf(代理到 http://frontend:80)
+/fivecut/infra/nginx/conf.d/api.conf(代理到 http://api:8000)
+/fivecut/infra/nginx/conf.d/minio.conf(代理到 http://minio:9000)
+```
 
 **Clone 並設定環境變數**
 ```bash
 git clone https://github.com/LUKEYAU/Five_HighLight_WS.git fivecut
 cd fivecut
 cd infra
-cp .env .env.example
+cp .env.example .env
 ```
-放tls憑證至fiveut/infra/nginx/ssl
+放tls憑證至fiveut/infra/nginx/ssl  
+- fiveclip.fcuai.tw.crt / fiveclip.fcuai.tw.key
+- fiveclip-api.fcuai.tw.crt / fiveclip-api.fcuai.tw.key
+- fiveclip-s3.fcuai.tw.crt / fiveclip-s3.fcuai.tw.key
+
+如檔名不同對應修改  
+- /fivecut/infra/nginx/conf.d/frontend.conf
+- /fivecut/infra/nginx/conf.d/api.conf
+- /fivecut/infra/nginx/conf.d/minio.conf
+Nginx reload:
+```bash
+cd /home/luke/fivecut/infra
+docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
+```
+
 ```
 GOOGLE_CLIENT_ID=....
 ```
@@ -59,87 +82,7 @@ docker compose up -d --build
 docker compose up -d --build worker --profile worker
 ```
 
-## 存取(不用看)
-- 前端:http://localhost:5173
-- API Health:http://localhost:8000/health
-- MinIO Console:http://localhost:9001
 
----
-## 換 Port / 用網域與反向代理時要改哪些(不用看)
-**A. 只換對外 port(不走網域)**
-
-假設把:  
-前端對外改為 :3000  
-API 對外改為 :8080  
-MinIO(S3)對外改為 :19000(Console 可維持 9001 或自訂)
-
-**步驟:
-編輯 infra/docker-compose.yml:**
-```
-services:
-  frontend:
-    environment:
-      VITE_API_BASE: http://localhost:8080
-    ports:
-      - "3000:5173"
-
-  api:
-    ports:
-      - "8080:8000"
-
-  minio:
-    ports:
-      - "19000:9000"  # S3 API
-      - "9001:9001"   # Console
-```
-
-同步修改 .env:
-```
-FRONTEND_ORIGIN=http://localhost:3000
-S3_PUBLIC_ENDPOINT=http://localhost:19000
-```
-
-重建:
-```bash
-docker compose up -d --build
-```
-
-**要點:**
-- .env 的 FRONTEND_ORIGIN 影響 API 的 CORS
-- VITE_API_BASE 是前端打 API 的 URL
-- S3_PUBLIC_ENDPOINT 是 API 幫你「簽名」時寫進預簽 URL 的主機，一定- 要是瀏覽器能直連的對外位址與 Port
-
----
-**B. 改用網域(反向代理)**
-開 80(HTTP) 和 443(HTTPS) 給外部,再反向代理5173、8000、9000/9001(不對外開)
-
-建議配三個子網域(HTTPS):
-- app.example.com → 前端
-- api.example.com → API
-- s3.example.com → MinIO(S3 API 給瀏覽器 PUT 直傳)
-
-
-infra/docker-compose.yml:把對外 ports 關掉
-```yml
-services:
-  frontend:
-    # ports: ["5173:5173"]  # 可移除，或保留給內網測試
-    environment:
-      VITE_API_BASE: api.example.com
-  api:
-    # ports: ["8000:8000"]  # 同上
-  minio:
-    ports:
-      - "9000:9000"  # 若反代直接連容器網路，可移除
-      - "9001:9001"
-```
-
-.env 改成網域:
-```bash
-FRONTEND_ORIGIN=https://app.example.edu
-S3_PUBLIC_ENDPOINT=https://s3.example.edu
-```
----
 ## 更新、重啟與除錯
 
 更新程式:
