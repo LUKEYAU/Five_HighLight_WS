@@ -52,16 +52,6 @@ cd infra
 cp .env.example .env
 ```
 
-放tls憑證至fiveut/infra/nginx/ssl  
-- fiveclip.fcuai.tw.crt / fiveclip.fcuai.tw.key
-- fiveclip-api.fcuai.tw.crt / fiveclip-api.fcuai.tw.key
-- fiveclip-s3.fcuai.tw.crt / fiveclip-s3.fcuai.tw.key
-
-如檔名不同對應修改  
-- /fivecut/infra/nginx/conf.d/frontend.conf
-- /fivecut/infra/nginx/conf.d/api.conf
-- /fivecut/infra/nginx/conf.d/minio.conf
-Nginx reload:
 ```bash
 cd infra
 docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
@@ -78,7 +68,6 @@ https://app.example.com
 ## 啟動服務
 ```bash
 cd infra
-docker compose build --no-cache frontend
 docker compose up -d --build
 docker compose up -d --build worker --profile worker
 ```
