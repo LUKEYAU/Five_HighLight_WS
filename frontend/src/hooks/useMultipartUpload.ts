@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { createMultipart, signPart, completeMultipart, API_BASE } from "../lib/api";
 
 const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB
-const CONCURRENCY = 1;
+const CONCURRENCY = 2;
 
 type UploadState = {
   isUploading: boolean;

@@ -1,3 +1,25 @@
 boto3
 redis
 rq
+tqdm
+numpy==2.1.1
+pandas==2.2.3
+requests==2.32.3
+PyYAML==6.0.2
+opencv-python-headless==4.12.0.88
+scipy==1.15.2
+scikit-image==0.25.2
+pillow==11.1.0
+shapely==2.1.2
+easyocr==1.7.2
+lap==0.5.12
+thop==0.1.1.post2209072238
+absl-py==2.2.2
+matplotlib==3.10.1
+seaborn==0.13.2
+ultralytics==8.3.70
+
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+torchaudio==2.7.1+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu

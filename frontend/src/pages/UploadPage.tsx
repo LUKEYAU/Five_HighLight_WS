@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMultipartUpload } from "../hooks/useMultipartUpload";
-import { listRecentUploads, type RecentItem } from "../lib/api";
-import { deleteUpload, presignDownload } from "../lib/api"; // ← 新增
+import { listRecentUploads, listAllUploads, getMe, type RecentItem } from "../lib/api";import { deleteUpload, presignDownload } from "../lib/api"; // ← 新增
 import { isSignedIn, clearIdToken } from "../lib/auth";
 import GoogleLogin from "../components/GoogleLogin";
 
@@ -13,22 +12,39 @@ export default function UploadPage() {
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [recentErr, setRecentErr] = useState<string | null>(null);
-  const [deletingKey, setDeletingKey] = useState<string | null>(null); // ← 新增
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAll] = useState(true); 
+  const [ownerSub] = useState<string | undefined>(undefined); 
 
   const refreshRecent = useCallback(async () => {
     setLoadingRecent(true);
     setRecentErr(null);
     try {
-      const r = await listRecentUploads(50); // 多拿一點
-      setRecent(r.items);
+      if (isAdmin && showAll) {
+        const r = await listAllUploads(200, ownerSub); 
+        setRecent(r.items);
+      } else {
+        const r = await listRecentUploads(50);
+        setRecent(r.items);
+      }
     } catch (e: any) {
       setRecentErr(e?.message ?? String(e));
     } finally {
       setLoadingRecent(false);
     }
-  }, []);
+  }, [isAdmin, showAll, ownerSub]);
 
-  useEffect(() => { if (signedIn) refreshRecent(); }, [signedIn, refreshRecent]);
+  useEffect(() => {
+    if (!signedIn) return;
+    (async () => {
+      try {
+        const me = await getMe();
+        setIsAdmin(!!me.isAdmin);
+      } catch { /* false */ }
+      await refreshRecent();
+    })();
+  }, [signedIn, refreshRecent]);
 
   const onFiles = useCallback(async (files: FileList | null) => {
     if (!files || !files[0]) return;
@@ -61,15 +77,29 @@ export default function UploadPage() {
   
   if (!signedIn) {
     return (
-      <div className="page page-center">
-        <div className="card">
-          <h2>登入以開始上傳</h2>
+      <div className="page page-center" style={{ paddingTop: 48 }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <img
+            src="/Football.png"
+            alt="Football"
+            style={{ width: 96, height: 96, objectFit: "contain", marginBottom: 12 }}
+          />
+          <h1 className="brand-fc" style={{ margin: 0, lineHeight: 1 }}>
+            𝔽𝕀𝕍𝔼ℂ𝕌𝕋
+          </h1>
+          <p className="muted" style={{ marginTop: 6 }}>
+            登入後即可上傳影片並自動產生精華
+          </p>
+        </div>
+        <div className="card" style={{ maxWidth: 420, width: "100%" }}>
+          <h3 style={{ marginTop: 0 }}>登入以開始上傳</h3>
           <p className="muted">使用 Google 帳戶登入後，你只會看到自己的上傳紀錄。</p>
           <GoogleLogin onSignedIn={() => window.location.reload()} />
         </div>
       </div>
     );
   }
+
 
   return (
     <div className="page">

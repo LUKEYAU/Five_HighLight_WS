@@ -24,8 +24,7 @@ export default function GoogleLogin({ onSignedIn }: { onSignedIn?: () => void })
       if (btnRef.current) {
         window.google.accounts.id.renderButton(btnRef.current, { theme: "outline", size: "large" });
       }
-      // 也可以開啟 One Tap：
-      // window.google.accounts.id.prompt();
+
     };
     if ((window as any).google?.accounts?.id) onLoad();
     else {
